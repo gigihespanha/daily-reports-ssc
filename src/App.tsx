@@ -95,25 +95,52 @@ const MONTHS = [
 ];
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.split("\n");
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map((h) => h.replace(/"/g, "").trim());
-  const rows: Record<string, string>[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-    const vals: string[] = [];
-    let cur = "", inQ = false;
-    for (let ci = 0; ci < line.length; ci++) {
-      const c = line[ci];
-      if (c === '"') inQ = !inQ;
-      else if (c === "," && !inQ) { vals.push(cur.trim()); cur = ""; }
-      else cur += c;
+  // Parser caractere-a-caractere: respeita aspas, vírgulas e QUEBRAS DE LINHA
+  // dentro de campos entre aspas (o export oficial do BookingKoala tem campos
+  // assim, ex: "Provider details"). Um parser baseado em split("\n") quebra
+  // nesse caso porque corta o arquivo em linhas antes de saber que está
+  // dentro de um campo entre aspas.
+  const allRows: string[][] = [];
+  let row: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        cur += c;
+      }
+    } else {
+      if (c === '"') {
+        inQuotes = true;
+      } else if (c === ",") {
+        row.push(cur); cur = "";
+      } else if (c === "\r") {
+        // ignora; o \n que vem a seguir fecha a linha
+      } else if (c === "\n") {
+        row.push(cur); cur = "";
+        allRows.push(row); row = [];
+      } else {
+        cur += c;
+      }
     }
-    vals.push(cur.trim());
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => (row[h] = vals[idx] || ""));
-    rows.push(row);
+  }
+  if (cur.length > 0 || row.length > 0) {
+    row.push(cur);
+    allRows.push(row);
+  }
+  if (allRows.length < 2) return [];
+  const headers = allRows[0].map((h) => h.replace(/^"|"$/g, "").trim());
+  const rows: Record<string, string>[] = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const vals = allRows[i];
+    if (vals.length === 1 && vals[0].trim() === "") continue; // pula linha vazia
+    const r: Record<string, string> = {};
+    headers.forEach((h, idx) => (r[h] = (vals[idx] || "").trim()));
+    rows.push(r);
   }
   return rows;
 }
@@ -362,7 +389,7 @@ export default function App() {
           "Tip": String(tip),
           "Booking status": r["Booking status"] || "",
           "Service": r["Service"] || r["Frequency"] || "",
-          "Booking ID": r["Booking ID"] || r["Booking Id"] || r["BookingID"] || "",
+          "Booking ID": r["Booking ID"] || r["Booking Id"] || r["Booking id"] || r["BookingID"] || "",
         };
       });
       const valid = normalized.filter((r) => r["Booking status"].toLowerCase() !== "declined");
