@@ -255,8 +255,7 @@ export default function App() {
       const locKey = LOCATION_MAP[locRaw];
       if (locKey && totals[locKey] !== undefined) {
         const amt = parseFloat((row["Final amount"] || row["Final Amount"] || "0").replace(/[$,]/g, "")) || 0;
-        const tip = parseFloat((row["Tip"] || "0").replace(/[$,]/g, "")) || 0;
-        totals[locKey] += amt + tip;
+        totals[locKey] += amt;
       }
     });
     const isCurrentMonth = viewMonth === now.getMonth() && viewYear === now.getFullYear();
@@ -317,8 +316,7 @@ export default function App() {
         logDate = new Date(dateStr);
       }
       const amt = parseFloat((row["Final amount"] || "0").replace(/[$,]/g, "")) || 0;
-      const tip = parseFloat((row["Tip"] || "0").replace(/[$,]/g, "")) || 0;
-      const total = amt + tip;
+      const total = amt;
       const locRaw = (row["Location Clean"] || row["City"] || row["Location"] || "").trim();
       const locKey = LOCATION_MAP[locRaw];
       if (!locKey) return;
