@@ -167,17 +167,32 @@ module.exports = async (req, res) => {
     const totalBooked = Object.values(totals).reduce((s, v) => s + v, 0);
     const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
     const daysRemaining = Math.max(0, daysInMonth - now.getDate());
-    const pct = goals.monthlyGoal > 0 ? (totalBooked / goals.monthlyGoal) * 100 : 0;
+    const calcMetrics = (goal, booked, currentDayOfMonth, daysRemaining) => {
+      const remainingGoal = Math.max(0, goal - booked);
+      const dailyTarget = daysRemaining > 0 ? remainingGoal / daysRemaining : 0;
+      const expectedBooking = (goal / daysInMonth) * currentDayOfMonth;
+      const actualProgressPct = goal > 0 ? (booked / goal) * 100 : 0;
+      const performanceStatus = booked >= expectedBooking ? "🟢 ON TRACK" : "🔴 BEHIND";
+      return { remainingGoal, dailyTarget, expectedBooking, actualProgressPct, performanceStatus };
+    };
+    const currentDayOfMonth = now.getDate();
+    const totalM = calcMetrics(goals.monthlyGoal, totalBooked, currentDayOfMonth, daysRemaining);
 
-    let message = `*📊 NIGHTLY REPORT — ${monthName.toUpperCase()} ${year}*\n`;
-    message += `🎯 Goal: ${money(goals.monthlyGoal)}  |  📈 Booked: ${money(totalBooked)}  (${pct.toFixed(1)}%)\n`;
-    message += `⏳ Days remaining this month: ${daysRemaining}\n\n`;
+    const ts = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+    let message = `📊 ${monthName.toUpperCase()} PERFORMANCE UPDATE\n🕒 Exported: ${ts}\n━━━━━━━━━━━━━━━\n`;
+    message += `🎯 Monthly Goal: ${money(goals.monthlyGoal)}\n`;
+    message += `📈 Actual Booked: ${money(totalBooked)}\n`;
+    message += `💰 ACTUAL PROGRESS: ${totalM.actualProgressPct.toFixed(1)}%\n`;
+    message += `📅 STATUS: ${totalM.performanceStatus}\n`;
+    message += `⏳ Days Remaining: ${daysRemaining}\n━━━━━━━━━━━━━━━\n`;
     Object.keys(LOCATION_NAMES).forEach((key) => {
       const goal = goals.locationTargets[key] || 0;
       const booked = totals[key] || 0;
-      const status = booked >= (goal / daysInMonth) * (daysInMonth - daysRemaining) ? "🟢" : "🔴";
-      message += `${status} *${LOCATION_NAMES[key]}*: ${money(booked)} / ${money(goal)}\n`;
+      const c = calcMetrics(goal, booked, currentDayOfMonth, daysRemaining);
+      message += `📍 ${LOCATION_NAMES[key]}: ${money(booked)} / ${money(goal)} (${c.actualProgressPct.toFixed(0)}%) ${c.performanceStatus}\n`;
+      if (c.dailyTarget > 0) message += `   → Need ${money(c.dailyTarget)}/day to hit goal\n`;
     });
+    message += `━━━━━━━━━━━━━━━\n💡 Need ${money(totalM.dailyTarget)}/day across all locations`;
 
     res.setHeader("Content-Type", "application/json");
     res.status(200).json({ message, totalBooked, monthlyGoal: goals.monthlyGoal });
