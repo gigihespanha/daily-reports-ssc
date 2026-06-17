@@ -6,7 +6,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+import { getFirestore, doc, setDoc, onSnapshot, collection } from "firebase/firestore";
 import {
   Target,
   Share2,
@@ -43,11 +43,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "simply-spotless-production";
-// Google Sheets CSV URL - lê a planilha diretamente (sempre ao vivo, não
-// depende de "Publish to web" / republicação manual, que pode atrasar ou
-// nunca atualizar se a opção de republicar automaticamente estiver desligada)
+// Google Sheets CSV URL (Booking Koala tab)
 const SHEETS_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/1de646F88FaERhyKohDHyjfUe-NFuVF5Fea7HeeIledA/edit?usp=sharing";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRoUnSQcVwZCmOZAz47LrVfNopfXi9nIvlUqz1ZCU_nS0vHYAquW9jZQiL3855RlkALKrMU-u3LFYNW/pub?gid=827331040&single=true&output=csv";
 // Map Location Clean values from sheet → app location keys
 const LOCATION_MAP: Record<string, string> = {
   // Booking Koala CSV export exact values
@@ -176,6 +174,7 @@ export default function App() {
   const [copiedReport, setCopiedReport] = useState<string | null>(null);
   const [sheetRows, setSheetRows] = useState<Record<string, string>[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
+  const [firestoreBookings, setFirestoreBookings] = useState<Record<string, string>[]>([]);
   const [csvFileName, setCsvFileName] = useState<string | null>(null);
   const [sheetSyncing, setSheetSyncing] = useState(false);
   const [sheetLastSync, setSheetLastSync] = useState<string | null>(null);
@@ -247,6 +246,36 @@ export default function App() {
     const interval = setInterval(syncSheets, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [syncSheets]);
+  useEffect(() => {
+    // Escuta em tempo real a coleção de reservas que o Zapier grava direto
+    // no Firestore (via /api/booking-webhook). Cada reserva é um documento
+    // com o Booking ID como chave, então atualizações de status sobrescrevem
+    // o registro em vez de duplicar.
+    const bookingsRef = collection(db, "artifacts", appId, "public", "data", "bookings");
+    const unsub = onSnapshot(
+      bookingsRef,
+      (snap) => {
+        const rows: Record<string, string>[] = [];
+        snap.forEach((d) => {
+          const data: any = d.data();
+          rows.push({
+            "Date": data.date || "",
+            "Full name": data.fullName || "",
+            "Location Clean": data.location || "",
+            "Location": data.location || "",
+            "Final amount": String(data.finalAmount ?? "0"),
+            "Tip": String(data.tip ?? "0"),
+            "Booking status": data.status || "",
+            "Service": data.service || "",
+            "Booking ID": d.id,
+          });
+        });
+        setFirestoreBookings(rows);
+      },
+      () => { /* coleção pode não existir ainda; sem problema, cai no fallback da planilha */ }
+    );
+    return () => unsub();
+  }, []);
   const allLocations = useMemo(() => {
     const combined = { ...LOCATION_CONFIG };
     const customKeys = Object.keys(data.customLocations || {});
@@ -256,7 +285,7 @@ export default function App() {
   }, [data.customLocations, data.hiddenLocations]);
   const monthLabel = `${MONTH_SHORT[viewMonth]} ${viewYear}`;
   const metrics = useMemo(() => {
-    const rawSourceRows = csvRows.length > 0 ? csvRows : sheetRows;
+    const rawSourceRows = csvRows.length > 0 ? csvRows : (firestoreBookings.length > 0 ? firestoreBookings : sheetRows);
     const sourceRows = dedupeByBookingId(rawSourceRows);
     const monthRows = sourceRows.filter((r) => {
       const dateStr = (r["Date"] || "").trim();
@@ -313,7 +342,7 @@ export default function App() {
       cityMetrics[key] = { goal: cityGoal, booked: totals[key] || 0, ...calcMetrics(cityGoal, totals[key] || 0) };
     });
     return { totals, totalGoal, totalBooked, ...totalM, expectedProgressPct, daysInMonth, currentDayOfMonth, daysRemaining, cityMetrics };
-  }, [sheetRows, csvRows, allLocations, data, viewMonth, viewYear]);
+  }, [sheetRows, csvRows, firestoreBookings, allLocations, data, viewMonth, viewYear]);
   const weeklyMetrics = useMemo(() => {
     const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
     const startOfThisWeek = new Date(today);
@@ -326,7 +355,7 @@ export default function App() {
     const locKeys = Object.keys(allLocations);
     const thisWeek: any = {}, lastWeek: any = {};
     locKeys.forEach((k) => { thisWeek[k] = 0; lastWeek[k] = 0; });
-    const _srcRaw = csvRows.length > 0 ? csvRows : sheetRows;
+    const _srcRaw = csvRows.length > 0 ? csvRows : (firestoreBookings.length > 0 ? firestoreBookings : sheetRows);
     const _src = dedupeByBookingId(_srcRaw);
     _src.forEach((row) => {
       const st = (row["Booking status"] || "").trim().toLowerCase();
@@ -362,7 +391,7 @@ export default function App() {
       return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
     };
     return { thisWeek, lastWeek, thisWeekTotal, lastWeekTotal, thisWeekLabel: weekLabel(0), lastWeekLabel: weekLabel(-7) };
-  }, [sheetRows, csvRows, allLocations]);
+  }, [sheetRows, csvRows, firestoreBookings, allLocations]);
   const handleRefresh = async () => {
     setSheetSyncing(true);
     await syncSheets();
@@ -473,7 +502,7 @@ export default function App() {
               <div className="flex items-center gap-1.5 mt-0.5">
                 {sheetError ? <WifiOff size={10} className="text-rose-400" /> : sheetSyncing ? <RefreshCcw size={10} className="text-blue-400 animate-spin" /> : <Wifi size={10} className="text-emerald-400" />}
                 <span className="text-[10px] text-slate-400 font-bold">
-                  {csvFileName ? `CSV: ${csvFileName}` : sheetError ? "Sync error" : sheetSyncing ? "Syncing..." : sheetLastSync ? `Synced ${sheetLastSync}` : ""}
+                  {csvFileName ? `CSV: ${csvFileName}` : firestoreBookings.length > 0 ? "Live (Zapier → Firestore)" : sheetError ? "Sync error" : sheetSyncing ? "Syncing..." : sheetLastSync ? `Synced ${sheetLastSync}` : ""}
                 </span>
               </div>
             </div>
