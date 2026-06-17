@@ -169,9 +169,9 @@ module.exports = async (req, res) => {
     const daysRemaining = Math.max(0, daysInMonth - now.getDate());
     const pct = goals.monthlyGoal > 0 ? (totalBooked / goals.monthlyGoal) * 100 : 0;
 
-    let message = `*📊 RELATÓRIO NOTURNO — ${monthName.toUpperCase()} ${year}*\n`;
-    message += `🎯 Meta: ${money(goals.monthlyGoal)}  |  📈 Reservado: ${money(totalBooked)}  (${pct.toFixed(1)}%)\n`;
-    message += `⏳ Dias restantes no mês: ${daysRemaining}\n\n`;
+    let message = `*📊 NIGHTLY REPORT — ${monthName.toUpperCase()} ${year}*\n`;
+    message += `🎯 Goal: ${money(goals.monthlyGoal)}  |  📈 Booked: ${money(totalBooked)}  (${pct.toFixed(1)}%)\n`;
+    message += `⏳ Days remaining this month: ${daysRemaining}\n\n`;
     Object.keys(LOCATION_NAMES).forEach((key) => {
       const goal = goals.locationTargets[key] || 0;
       const booked = totals[key] || 0;
