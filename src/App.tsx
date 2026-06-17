@@ -47,7 +47,7 @@ const appId = "simply-spotless-production";
 // depende de "Publish to web" / republicação manual, que pode atrasar ou
 // nunca atualizar se a opção de republicar automaticamente estiver desligada)
 const SHEETS_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/1de646F88FaERhyKohDHyjfUe-NFuVF5Fea7HeeIledA/export?format=csv&gid=827331040";
+  "https://docs.google.com/spreadsheets/d/1de646F88FaERhyKohDHyjfUe-NFuVF5Fea7HeeIledA/edit?usp=sharing";
 // Map Location Clean values from sheet → app location keys
 const LOCATION_MAP: Record<string, string> = {
   // Booking Koala CSV export exact values
