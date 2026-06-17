@@ -43,9 +43,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "simply-spotless-production";
-// Google Sheets CSV URL (Booking Koala tab) - UPDATED June 2026
+// Google Sheets CSV URL - lê a planilha diretamente (sempre ao vivo, não
+// depende de "Publish to web" / republicação manual, que pode atrasar ou
+// nunca atualizar se a opção de republicar automaticamente estiver desligada)
 const SHEETS_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRoUnSQcVwZCmOZAz47LrVfNopfXi9nIvlUqz1ZCU_nS0vHYAquW9jZQiL3855RlkALKrMU-u3LFYNW/pub?gid=827331040&single=true&output=csv";
+  "https://docs.google.com/spreadsheets/d/1de646F88FaERhyKohDHyjfUe-NFuVF5Fea7HeeIledA/export?format=csv&gid=827331040";
 // Map Location Clean values from sheet → app location keys
 const LOCATION_MAP: Record<string, string> = {
   // Booking Koala CSV export exact values
